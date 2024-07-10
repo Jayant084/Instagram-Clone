@@ -1,59 +1,86 @@
 -- working w the above data:
--- Find the 5 oldest users:
-SELECT * FROM Users
-	ORDER BY created_at 
-    LIMIT 5;
+-- Retrieve all users who have never posted a photo:
 
--- What day of the week do most users register on?
-SELECT 
-    DAYNAME(created_at) AS day,
-    COUNT(*) AS total
-FROM Users
-GROUP BY day
-ORDER BY total DESC
-LIMIT 2;
+SELECT u.id, u.username
+FROM users u
+LEFT JOIN photos p ON u.id = p.user_id
+WHERE p.id IS NULL;
 
--- Find the users who have never posted a photo:
-SELECT username FROM Users
-	LEFT JOIN Photos
-    ON Users.id = Photos.user_id
-WHERE image_url IS NULL;
+-- Find the top 5 most liked photos:
 
--- Find the user with the most liked photo:
-SELECT
-	username,
-	Photos.id,
-    Photos.image_url,
-    COUNT(*) AS total
-FROM Photos
-	JOIN Likes
-		ON Likes.photo_id = Photos.id
-	JOIN Users
-		ON Users.id = Photos.user_id
-GROUP BY Photos.id
-ORDER BY total DESC
+SELECT p.id, p.image_url, COUNT(l.user_id) AS like_count
+FROM photos p
+LEFT JOIN likes l ON p.id = l.photo_id
+GROUP BY p.id
+ORDER BY like_count DESC
+LIMIT 5;
+
+--Get the number of comments each photo has received:
+
+SELECT p.id, p.image_url, COUNT(c.id) AS comment_count
+FROM photos p
+LEFT JOIN comments c ON p.id = c.photo_id
+GROUP BY p.id;
+
+-- Find users who have commented on their own photos:
+
+SELECT DISTINCT u.id, u.username
+FROM users u
+JOIN comments c ON u.id = c.user_id
+JOIN photos p ON c.photo_id = p.id
+WHERE u.id = p.user_id;
+
+-- List the top 5 most followed users:
+
+SELECT u.id, u.username, COUNT(f.follower_id) AS follower_count
+FROM users u
+LEFT JOIN follows f ON u.id = f.followee_id
+GROUP BY u.id
+ORDER BY follower_count DESC
+LIMIT 5;
+
+--Retrieve all photos tagged with a specific tag (e.g., 'sunset'):
+
+SELECT p.id, p.image_url
+FROM photos p
+JOIN photo_tags pt ON p.id = pt.photo_id
+JOIN tags t ON pt.tag_id = t.id
+WHERE t.tag_name = 'sunset';
+
+-- Find the average number of likes per photo:
+
+SELECT AVG(like_count) AS avg_likes
+FROM (
+    SELECT COUNT(l.user_id) AS like_count
+    FROM photos p
+    LEFT JOIN likes l ON p.id = l.photo_id
+    GROUP BY p.id
+) subquery;
+
+-- Get the list of users who follow a specific user (e.g., user with id 1):
+
+SELECT u.id, u.username
+FROM users u
+JOIN follows f ON u.id = f.follower_id
+WHERE f.followee_id = 1;
+
+-- Find the user who has liked the most photos:
+
+SELECT u.id, u.username, COUNT(l.photo_id) AS like_count
+FROM users u
+JOIN likes l ON u.id = l.user_id
+GROUP BY u.id
+ORDER BY like_count DESC
 LIMIT 1;
 
--- How many times does the avg user post?
--- # photos / # users
-SELECT ((SELECT COUNT(*) FROM Photos) / (SELECT COUNT(*) FROM Users));
+-- Get the most recent comment for each photo:
 
--- What are the top 5 most commonly used hashtags?
-SELECT tags.tag_name, 
-       Count(*) AS total 
-FROM   photo_tags 
-       JOIN tags 
-         ON photo_tags.tag_id = tags.id 
-GROUP  BY tags.id 
-ORDER  BY total DESC 
-LIMIT  5; 
+SELECT p.id AS photo_id, p.image_url, c.id AS comment_id, c.comment_text, c.created_at
+FROM photos p
+JOIN comments c ON p.id = c.photo_id
+WHERE c.created_at = (
+    SELECT MAX(created_at)
+    FROM comments
+    WHERE photo_id = p.id
+);
 
--- Find users who have liked every single photo on the site:
-SELECT username, 
-       Count(*) AS num_likes 
-FROM   users 
-       INNER JOIN likes 
-               ON users.id = likes.user_id 
-GROUP  BY likes.user_id 
-HAVING num_likes = (SELECT Count(*) 
-                    FROM   photos); 
